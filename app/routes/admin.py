@@ -1,0 +1,58 @@
+from flask import Blueprint, jsonify
+from app.utils.services.qr_service import QRService   # ✅ matches your structure
+from app.utils.decorators import admin_required
+
+admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
+
+
+# -------------------------
+# 🚨 FRAUD ALERTS
+# -------------------------
+@admin_bp.route("/fraud-alerts", methods=["GET"])
+@admin_required   # 🔐 protect endpoint
+def get_fraud_alerts():
+    """
+    GET /api/admin/fraud-alerts
+
+    Returns recent high-risk scan activities.
+    """
+    try:
+        alerts = QRService.get_fraud_alerts(limit=50)
+
+        return jsonify({
+            "success": True,
+            "count": len(alerts),
+            "alerts": alerts
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# -------------------------
+# 📊 BATCH STATS
+# -------------------------
+@admin_bp.route("/batch-stats/<int:batch_id>", methods=["GET"])
+@admin_required   # 🔐 protect endpoint
+def get_batch_stats(batch_id):
+    """
+    GET /api/admin/batch-stats/<batch_id>
+
+    Returns scan analytics for a batch.
+    """
+    try:
+        stats = QRService.get_scan_stats(batch_id)
+
+        return jsonify({
+            "success": True,
+            "data": stats
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500

@@ -1,9 +1,19 @@
 from flask import Flask
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s"
+)
+
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
 from .config import Config
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
+limiter = Limiter(key_func=get_remote_address)
 db = SQLAlchemy()
 migrate = Migrate()
 jwt = JWTManager()
@@ -12,8 +22,7 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    app.config["JWT_SECRET_KEY"] = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc3NDI4MjYwMCwianRpIjoiZTBjOGE4MTMtOGRhNi00YzllLWFhMWYtMzNiMjU4ZjUzZDBmIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6MSwibmJmIjoxNzc0MjgyNjAwLCJjc3JmIjoiOGRiODkxZWUtM2VhYS00MTVkLThlNmUtY2UyZDQ4YzE1YjI5IiwiZXhwIjoxNzc0MjgzNTAwfQ.YsvBNZIIEGP_Sp4KQkIMRKTViHWcsR2wfrPuNsn6oNQ"
-
+    limiter.init_app(app)
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
@@ -25,5 +34,8 @@ def create_app():
 
     from app.routes.medicine import medicine_bp
     app.register_blueprint(medicine_bp)
+
+    from app.routes.admin import admin_bp
+    app.register_blueprint(admin_bp)
 
     return app

@@ -2,10 +2,11 @@ import base64
 from io import BytesIO
 from datetime import datetime
 import qrcode
+from app import limiter
 
 from flask import Blueprint, request, jsonify, send_file
 
-from app.services.qr_service import QRService
+from app.utils.services.qr_service import QRService
 from app.utils.qr_security import (
     generate_qr_payload,
     generate_qr_payload_with_serial
@@ -63,6 +64,7 @@ def parse_qr_payload(qr_data):
 # -------------------------
 
 @qr_bp.route("/verify", methods=["POST"])
+@limiter.limit("10 per minute")
 def verify_qr():
     data = request.get_json()
 
