@@ -10,6 +10,63 @@ from app import db
 
 class QRService:
 
+    # -------------------------
+    # 🆕 QR REGISTRATION (DAY 16)
+    # -------------------------
+    @staticmethod
+    def register_qr(batch_id, signature, payload=None):
+        """
+        Register QR code in database
+        """
+
+        # Check batch exists
+        batch = db.session.get(Batch, batch_id)
+        if not batch:
+            return {
+                "success": False,
+                "error": "Batch does not exist"
+            }, 404
+
+        # Prevent duplicate QR
+        existing = QRCode.query.filter_by(signature=signature).first()
+        if existing:
+            return {
+                "success": False,
+                "error": "QR already registered",
+                "qr_id": existing.id
+            }, 409
+
+        try:
+            qr = QRCode(
+                batch_id=batch_id,
+                signature=signature,
+                scan_count=0,
+                is_flagged=False
+            )
+
+            db.session.add(qr)
+            db.session.commit()
+
+            logging.info(f"QR registered: batch={batch_id}, qr_id={qr.id}")
+
+            return {
+                "success": True,
+                "qr_id": qr.id,
+                "batch_id": batch_id
+            }, 201
+
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f"QR registration failed: {str(e)}")
+
+            return {
+                "success": False,
+                "error": str(e)
+            }, 500
+
+    # -------------------------
+    # 🔐 VERIFY QR
+    # -------------------------
     @staticmethod
     def verify_qr(parsed_data, request_meta):
         batch_id = parsed_data['batch_id']
@@ -87,7 +144,9 @@ class QRService:
 
         # 🔴 CLONED
         if current_count >= 1:
-            logging.warning(f"CLONED QR detected: batch={batch_id}, scans={qr_record.scan_count}")
+            logging.warning(
+                f"CLONED QR detected: batch={batch_id}, scans={qr_record.scan_count}"
+            )
 
             QRService._log_scan(
                 batch_id,
@@ -104,7 +163,7 @@ class QRService:
                 "scan_count": qr_record.scan_count
             }, 200
 
-        # 🟢 AUTHENTIC (FIRST SCAN)
+        # 🟢 AUTHENTIC
         logging.info(f"QR verified: batch={batch_id}, status=authentic")
 
         QRService._log_scan(
