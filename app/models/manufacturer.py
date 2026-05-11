@@ -2,6 +2,7 @@ from app import db
 from datetime import datetime
 from app.utils.security import hash_password, verify_password
 
+
 class Manufacturer(db.Model):
     __tablename__ = "manufacturers"
 
@@ -10,12 +11,6 @@ class Manufacturer(db.Model):
     name = db.Column(db.String(120), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    
-    def set_password(self, password):
-        self.password_hash = hash_password(password)
-
-    def check_password(self, password):
-        return verify_password(password, self.password_hash)
 
     created_at = db.Column(
         db.DateTime,
@@ -23,6 +18,34 @@ class Manufacturer(db.Model):
         nullable=False
     )
 
-    # Relationships
-    medicines = db.relationship("Medicine", backref="manufacturer", lazy=True)
-    batches = db.relationship("Batch", backref="manufacturer", lazy=True)
+    # -------------------------
+    # 🔐 AUTH METHODS
+    # -------------------------
+    def set_password(self, password):
+        self.password_hash = hash_password(password)
+
+    def check_password(self, password):
+        return verify_password(password, self.password_hash)
+
+    # -------------------------
+    # 🔗 RELATIONSHIPS
+    # -------------------------
+    medicines = db.relationship(
+        "Medicine",
+        backref="manufacturer",
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
+
+    batches = db.relationship(
+        "Batch",
+        backref="manufacturer",
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
+
+    # -------------------------
+    # 🧾 DEBUG REPRESENTATION
+    # -------------------------
+    def __repr__(self):
+        return f"<Manufacturer id={self.id} name={self.name}>"
