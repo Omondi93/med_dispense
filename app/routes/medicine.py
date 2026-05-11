@@ -4,9 +4,9 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
 from app.models.medicine import Medicine
 
-medicine_bp = Blueprint("medicine", __name__)
+medicine_bp = Blueprint("medicine", __name__, url_prefix="/api/medicine")
 
-@medicine_bp.route("/medicines", methods=["POST"])
+@medicine_bp.route("/", methods=["POST"])
 @jwt_required()
 def create_medicine():
 
