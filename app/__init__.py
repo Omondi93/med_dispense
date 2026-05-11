@@ -43,6 +43,9 @@ def create_app():
     from app.routes.qrcode import qr_bp
     app.register_blueprint(qr_bp)
 
+    from app.routes.batch import batch_bp
+    app.register_blueprint(batch_bp)
+
     # ✅ FIXED INDENTATION
     @app.route("/")
     def home():
