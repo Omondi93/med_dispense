@@ -18,6 +18,7 @@ db = SQLAlchemy()
 migrate = Migrate()
 jwt = JWTManager()
 
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -29,6 +30,7 @@ def create_app():
 
     # Import models AFTER db is initialized
     from app import models
+
     from app.routes.auth import auth_bp
     app.register_blueprint(auth_bp)
 
@@ -38,11 +40,12 @@ def create_app():
     from app.routes.admin import admin_bp
     app.register_blueprint(admin_bp)
 
+    # ✅ FIXED INDENTATION
     @app.route("/")
-def home():
-    return {
-        "status": "running",
-        "message": "MED-DISPENSE API is live"
-    }, 200
+    def home():
+        return {
+            "status": "running",
+            "message": "MED-DISPENSE API is live"
+        }, 200
 
     return app
