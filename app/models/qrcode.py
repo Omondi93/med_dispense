@@ -42,6 +42,14 @@ class QRCode(db.Model):
         nullable=False
     )
 
+    scan_logs = db.relationship(
+    "ScanLog",
+    backref="qrcode",
+    lazy=True,
+    cascade="all, delete-orphan"
+    )
+
+
     # 🧾 Optional audit/debug
     payload = db.Column(db.Text)
 
@@ -51,8 +59,6 @@ class QRCode(db.Model):
         nullable=False
     )
 
-    # 🔗 Relationships
-    scan_logs = db.relationship("ScanLog", backref="qrcode", lazy=True)
 
     def __repr__(self):
         return f"<QRCode id={self.id} batch={self.batch_id} scans={self.scan_count}>"

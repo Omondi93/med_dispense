@@ -5,8 +5,15 @@ import Dashboard from "./pages/Dashboard";
 import FraudAlerts from "./pages/FraudAlerts";
 import BatchStats from "./pages/BatchStats";
 import QRGenerator from "./pages/QRGenerator";
-
+import QRScanner from "./pages/QRScanner";
+import ScanHistory from "./pages/ScanHistory";
+import Batches from "./pages/Batches";
+import Medicines from "./pages/Medicines";
+import QRRegistry from "./pages/QRRegistry";
+import FraudAnalytics from "./pages/FraudAnalytics";
 import ProtectedRoute from "./components/ProtectedRoute";
+import QRScanHistory from "./pages/QRScanHistory";
+import ExpiryAlerts from "./pages/ExpiryAlerts";
 
 function App() {
   return (
@@ -23,6 +30,25 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route
+          path="/medicines"
+          element={
+            <ProtectedRoute>
+              <Medicines />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/expiry-alerts"
+          element={
+            <ProtectedRoute>
+              <ExpiryAlerts />
+            </ProtectedRoute>
+          }
+        />
+
 
         <Route
           path="/fraud-alerts"
@@ -43,10 +69,63 @@ function App() {
         />
 
         <Route
+          path="/fraud-analytics"
+          element={
+            <ProtectedRoute>
+              <FraudAnalytics />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/batches"
+          element={
+            <ProtectedRoute>
+              <Batches />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/scan-history"
+          element={
+            <ProtectedRoute>
+              <ScanHistory />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/scanner"
+          element={
+            <ProtectedRoute>
+              <QRScanner />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path="/qr-generator"
           element={
             <ProtectedRoute>
               <QRGenerator />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/qr-registry"
+          element={
+            <ProtectedRoute>
+              <QRRegistry />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/qr-registry/:qrId/history"
+          element={
+            <ProtectedRoute>
+              <QRScanHistory />
             </ProtectedRoute>
           }
         />

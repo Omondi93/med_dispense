@@ -1,67 +1,59 @@
 import base64
 from io import BytesIO
-from datetime import datetime
 import qrcode
-from app import limiter
 
 from flask import Blueprint, request, jsonify, send_file
 
+from app import limiter
+from app.models.batch import Batch
 from app.utils.services.qr_service import QRService
 from app.utils.qr_security import (
     generate_qr_payload,
-    generate_qr_payload_with_serial
+    generate_qr_payload_with_serial,
+    parse_qr_payload
 )
 
-qr_bp = Blueprint('qrcode', __name__, url_prefix='/api/qr')
+qr_bp = Blueprint("qrcode", __name__, url_prefix="/api/qr")
 
 
-# -------------------------
-# 🔧 HELPERS
-# -------------------------
+def make_qr_base64(payload):
+    qr = qrcode.QRCode(
+        error_correction=qrcode.constants.ERROR_CORRECT_Q,
+        box_size=10,
+        border=4
+    )
 
-def validate_date(date_str):
-    try:
-        datetime.strptime(date_str, "%Y-%m-%d")
-        return True
-    except ValueError:
-        return False
+    qr.add_data(payload)
+    qr.make(fit=True)
+
+    img = qr.make_image(
+        fill_color="black",
+        back_color="white"
+    )
+
+    buffer = BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+
+    return base64.b64encode(
+        buffer.getvalue()
+    ).decode("utf-8")
 
 
-def parse_qr_payload(qr_data):
-    try:
-        parts = qr_data.split('|')
+def get_batch_data(batch_id):
+    batch = Batch.query.get(batch_id)
 
-        # SINGLE QR
-        if len(parts) == 5:
-            return {
-                "batch_id": int(parts[0]),
-                "medicine_id": int(parts[1]),
-                "manufacture_date": parts[2],
-                "expiry_date": parts[3],
-                "serial": None,
-                "signature": parts[4]
-            }
-
-        # BULK QR
-        elif len(parts) == 6:
-            return {
-                "batch_id": int(parts[0]),
-                "medicine_id": int(parts[1]),
-                "manufacture_date": parts[2],
-                "expiry_date": parts[3],
-                "serial": parts[4],
-                "signature": parts[5]
-            }
-
+    if not batch:
         return None
 
-    except Exception:
-        return None
+    return {
+        "batch": batch,
+        "batch_id": batch.id,
+        "medicine_id": batch.medicine_id,
+        "manufacture_date": batch.manufacture_date.strftime("%Y-%m-%d"),
+        "expiry_date": batch.expiry_date.strftime("%Y-%m-%d")
+    }
 
-
-# -------------------------
-# 🔐 VERIFY QR
-# -------------------------
 
 @qr_bp.route("/verify", methods=["POST"])
 @limiter.limit("10 per minute")
@@ -74,8 +66,9 @@ def verify_qr():
             "message": "Missing qr_data field"
         }), 400
 
-    parsed = parse_qr_payload(data["qr_data"])
-    if not parsed:
+    try:
+        parsed = parse_qr_payload(data["qr_data"])
+    except Exception:
         return jsonify({
             "status": "tampered",
             "message": "Invalid QR format"
@@ -86,71 +79,44 @@ def verify_qr():
         "agent": request.headers.get("User-Agent", "")[:200]
     }
 
-    response, status_code = QRService.verify_qr(parsed, request_meta)
+    response, status_code = QRService.verify_qr(
+        parsed,
+        request_meta
+    )
 
     return jsonify(response), status_code
 
-
-# -------------------------
-# 📊 STATS
-# -------------------------
-
-@qr_bp.route("/stats/<int:batch_id>", methods=["GET"])
-def get_batch_stats(batch_id):
-    stats = QRService.get_scan_stats(batch_id)
-
-    return jsonify({
-        "success": True,
-        "data": stats
-    }), 200
-
-
-# -------------------------
-# 🔳 GENERATE + REGISTER SINGLE QR
-# -------------------------
 
 @qr_bp.route("/generate", methods=["POST"])
 def generate_qr():
     try:
         data = request.get_json()
 
-        if not data:
-            return jsonify({"success": False, "error": "No JSON data provided"}), 400
-
-        required = ['batch_id', 'medicine_id', 'manufacture_date', 'expiry_date']
-        missing = [f for f in required if f not in data]
-
-        if missing:
+        if not data or "batch_id" not in data:
             return jsonify({
                 "success": False,
-                "error": f"Missing fields: {', '.join(missing)}"
+                "error": "batch_id is required"
             }), 400
 
-        batch_id = data['batch_id']
-        medicine_id = data['medicine_id']
-        manufacture_date = data['manufacture_date']
-        expiry_date = data['expiry_date']
+        batch_data = get_batch_data(data["batch_id"])
 
-        if not validate_date(manufacture_date) or not validate_date(expiry_date):
+        if not batch_data:
             return jsonify({
                 "success": False,
-                "error": "Invalid date format (YYYY-MM-DD required)"
-            }), 400
+                "error": "Batch does not exist"
+            }), 404
 
-        # Step 1: Generate payload
         payload = generate_qr_payload(
-            batch_id,
-            medicine_id,
-            manufacture_date,
-            expiry_date
+            batch_data["batch_id"],
+            batch_data["medicine_id"],
+            batch_data["manufacture_date"],
+            batch_data["expiry_date"]
         )
 
-        # Step 2: Extract signature
-        signature = payload.split('|')[-1]
+        signature = payload.split("|")[-1]
 
-        # Step 3: Register QR
         reg_response, reg_status = QRService.register_qr(
-            batch_id=batch_id,
+            batch_id=batch_data["batch_id"],
             signature=signature,
             payload=payload
         )
@@ -158,30 +124,18 @@ def generate_qr():
         if not reg_response.get("success"):
             return jsonify(reg_response), reg_status
 
-        qr_id = reg_response["qr_id"]
-
-        # Step 4: Generate QR image
-        qr = qrcode.QRCode(
-            error_correction=qrcode.constants.ERROR_CORRECT_Q,
-            box_size=10,
-            border=4
-        )
-        qr.add_data(payload)
-        qr.make(fit=True)
-
-        img = qr.make_image(fill_color="black", back_color="white")
-
-        buffered = BytesIO()
-        img.save(buffered, format="PNG")
-        buffered.seek(0)
-
-        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        qr_code = make_qr_base64(payload)
 
         return jsonify({
             "success": True,
-            "qr_code": img_str,
+            "message": "QR generated and saved successfully",
+            "qr_code": qr_code,
             "payload": payload,
-            "qr_id": qr_id,
+            "qr_id": reg_response["qr_id"],
+            "batch_id": batch_data["batch_id"],
+            "medicine_id": batch_data["medicine_id"],
+            "manufacture_date": batch_data["manufacture_date"],
+            "expiry_date": batch_data["expiry_date"],
             "registered": True
         }), 201
 
@@ -192,40 +146,18 @@ def generate_qr():
         }), 500
 
 
-# -------------------------
-# 🏭 BULK GENERATE QR (DAY 17)
-# -------------------------
-
 @qr_bp.route("/generate/bulk", methods=["POST"])
 def generate_bulk_qr():
     try:
         data = request.get_json()
 
-        required = [
-            "batch_id",
-            "medicine_id",
-            "manufacture_date",
-            "expiry_date",
-            "quantity"
-        ]
-
-        if not data or any(field not in data for field in required):
+        if not data or "batch_id" not in data or "quantity" not in data:
             return jsonify({
                 "success": False,
-                "error": "Missing required fields"
+                "error": "batch_id and quantity are required"
             }), 400
 
-        batch_id = data["batch_id"]
-        medicine_id = data["medicine_id"]
-        manufacture_date = data["manufacture_date"]
-        expiry_date = data["expiry_date"]
-        quantity = data["quantity"]
-
-        if not validate_date(manufacture_date) or not validate_date(expiry_date):
-            return jsonify({
-                "success": False,
-                "error": "Invalid date format"
-            }), 400
+        quantity = int(data["quantity"])
 
         if quantity <= 0 or quantity > 5000:
             return jsonify({
@@ -233,18 +165,26 @@ def generate_bulk_qr():
                 "error": "Quantity must be between 1 and 5000"
             }), 400
 
+        batch_data = get_batch_data(data["batch_id"])
+
+        if not batch_data:
+            return jsonify({
+                "success": False,
+                "error": "Batch does not exist"
+            }), 404
+
         results = []
 
         for _ in range(quantity):
             payload, serial, signature = generate_qr_payload_with_serial(
-                batch_id,
-                medicine_id,
-                manufacture_date,
-                expiry_date
+                batch_data["batch_id"],
+                batch_data["medicine_id"],
+                batch_data["manufacture_date"],
+                batch_data["expiry_date"]
             )
 
             reg_response, reg_status = QRService.register_qr(
-                batch_id=batch_id,
+                batch_id=batch_data["batch_id"],
                 signature=signature,
                 serial=serial,
                 payload=payload
@@ -255,12 +195,15 @@ def generate_bulk_qr():
 
             results.append({
                 "qr_id": reg_response["qr_id"],
-                "serial": serial
+                "serial": serial,
+                "payload": payload
             })
 
         return jsonify({
             "success": True,
-            "batch_id": batch_id,
+            "message": "Bulk QR codes generated and saved",
+            "batch_id": batch_data["batch_id"],
+            "medicine_id": batch_data["medicine_id"],
             "generated": quantity,
             "preview": results[:5]
         }), 201
@@ -272,56 +215,51 @@ def generate_bulk_qr():
         }), 500
 
 
-# -------------------------
-# 📥 DOWNLOAD QR FILE
-# -------------------------
-
 @qr_bp.route("/generate/file", methods=["POST"])
 def generate_qr_file():
     try:
         data = request.get_json()
 
-        if not data:
-            return jsonify({"success": False, "error": "No JSON data"}), 400
-
-        required = ['batch_id', 'medicine_id', 'manufacture_date', 'expiry_date']
-        missing = [f for f in required if f not in data]
-
-        if missing:
+        if not data or "batch_id" not in data:
             return jsonify({
                 "success": False,
-                "error": f"Missing: {', '.join(missing)}"
+                "error": "batch_id is required"
             }), 400
 
-        batch_id = data['batch_id']
-        medicine_id = data['medicine_id']
-        manufacture_date = data['manufacture_date']
-        expiry_date = data['expiry_date']
+        batch_data = get_batch_data(data["batch_id"])
 
-        if not validate_date(manufacture_date) or not validate_date(expiry_date):
+        if not batch_data:
             return jsonify({
                 "success": False,
-                "error": "Invalid date format"
-            }), 400
+                "error": "Batch does not exist"
+            }), 404
 
         payload = generate_qr_payload(
-            batch_id,
-            medicine_id,
-            manufacture_date,
-            expiry_date
+            batch_data["batch_id"],
+            batch_data["medicine_id"],
+            batch_data["manufacture_date"],
+            batch_data["expiry_date"]
+        )
+
+        signature = payload.split("|")[-1]
+
+        QRService.register_qr(
+            batch_id=batch_data["batch_id"],
+            signature=signature,
+            payload=payload
         )
 
         qr = qrcode.make(payload)
 
-        buffered = BytesIO()
-        qr.save(buffered, format="PNG")
-        buffered.seek(0)
+        buffer = BytesIO()
+        qr.save(buffer, format="PNG")
+        buffer.seek(0)
 
         return send_file(
-            buffered,
-            mimetype='image/png',
+            buffer,
+            mimetype="image/png",
             as_attachment=True,
-            download_name=f"medicine_qr_{batch_id}.png"
+            download_name=f"medicine_qr_batch_{batch_data['batch_id']}.png"
         )
 
     except Exception as e:
@@ -329,3 +267,13 @@ def generate_qr_file():
             "success": False,
             "error": str(e)
         }), 500
+
+
+@qr_bp.route("/stats/<int:batch_id>", methods=["GET"])
+def get_batch_stats(batch_id):
+    stats = QRService.get_scan_stats(batch_id)
+
+    return jsonify({
+        "success": True,
+        "data": stats
+    }), 200

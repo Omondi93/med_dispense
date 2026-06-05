@@ -11,24 +11,26 @@ from app import db
 class QRService:
 
     # -------------------------
-    # 🆕 QR REGISTRATION (DAY 16)
+    # QR REGISTRATION
     # -------------------------
     @staticmethod
-    def register_qr(batch_id, signature, payload=None):
+    def register_qr(batch_id, signature, payload=None, serial=None):
         """
-        Register QR code in database
+        Register QR code in database.
         """
 
-        # Check batch exists
         batch = db.session.get(Batch, batch_id)
+
         if not batch:
             return {
                 "success": False,
                 "error": "Batch does not exist"
             }, 404
 
-        # Prevent duplicate QR
-        existing = QRCode.query.filter_by(signature=signature).first()
+        existing = QRCode.query.filter_by(
+            signature=signature
+        ).first()
+
         if existing:
             return {
                 "success": False,
@@ -40,6 +42,8 @@ class QRService:
             qr = QRCode(
                 batch_id=batch_id,
                 signature=signature,
+                serial_number=serial,
+                payload=payload,
                 scan_count=0,
                 is_flagged=False
             )
@@ -47,7 +51,9 @@ class QRService:
             db.session.add(qr)
             db.session.commit()
 
-            logging.info(f"QR registered: batch={batch_id}, qr_id={qr.id}")
+            logging.info(
+                f"QR registered: batch={batch_id}, qr_id={qr.id}"
+            )
 
             return {
                 "success": True,
@@ -57,7 +63,10 @@ class QRService:
 
         except Exception as e:
             db.session.rollback()
-            logging.error(f"QR registration failed: {str(e)}")
+
+            logging.error(
+                f"QR registration failed: {str(e)}"
+            )
 
             return {
                 "success": False,
@@ -65,131 +74,199 @@ class QRService:
             }, 500
 
     # -------------------------
-    # 🔐 VERIFY QR
+    # VERIFY QR
     # -------------------------
     @staticmethod
     def verify_qr(parsed_data, request_meta):
-        batch_id = parsed_data['batch_id']
-        medicine_id = parsed_data['medicine_id']
-        manufacture_date = parsed_data['manufacture_date']
-        expiry_date = parsed_data['expiry_date']
-        signature = parsed_data['signature']
+        batch_id = parsed_data["batch_id"]
+        medicine_id = parsed_data["medicine_id"]
+        manufacture_date = parsed_data["manufacture_date"]
+        expiry_date = parsed_data["expiry_date"]
+        signature = parsed_data["signature"]
+        serial = parsed_data.get("serial")
 
-        # 🔐 STEP 1 — VERIFY SIGNATURE
+        # STEP 1 — VERIFY SIGNATURE
         if not verify_signature(
             batch_id=batch_id,
             medicine_id=medicine_id,
             manufacture_date=manufacture_date,
             expiry_date=expiry_date,
+            serial=serial,
             signature=signature
         ):
-            logging.warning(f"Tampered QR attempt: batch={batch_id}")
+            logging.warning(
+                f"Tampered QR attempt: batch={batch_id}"
+            )
 
-            QRService._log_scan(batch_id, "tampered", signature, False, request_meta)
+            QRService._log_scan(
+                qr_id=None,
+                batch_id=batch_id,
+                status="tampered",
+                signature=signature,
+                is_valid=False,
+                request_meta=request_meta,
+                scan_count=0
+            )
 
             return {
                 "status": "tampered",
                 "message": "Invalid signature"
             }, 400
 
-        # 🗄 STEP 2 — CHECK BATCH
+        # STEP 2 — CHECK BATCH
         batch = db.session.get(Batch, batch_id)
-        if not batch:
-            logging.warning(f"Batch not found: batch={batch_id}")
 
-            QRService._log_scan(batch_id, "not_found", signature, True, request_meta)
+        if not batch:
+            logging.warning(
+                f"Batch not found: batch={batch_id}"
+            )
+
+            QRService._log_scan(
+                qr_id=None,
+                batch_id=batch_id,
+                status="not_found",
+                signature=signature,
+                is_valid=True,
+                request_meta=request_meta,
+                scan_count=0
+            )
 
             return {
                 "status": "not_found",
                 "message": "Batch not found"
             }, 404
 
-        # 🧪 STEP 3 — VALIDATE MEDICINE
+        # STEP 3 — VALIDATE MEDICINE
         if batch.medicine_id != medicine_id:
-            logging.warning(f"Medicine mismatch: batch={batch_id}")
+            logging.warning(
+                f"Medicine mismatch: batch={batch_id}"
+            )
 
-            QRService._log_scan(batch_id, "not_found", signature, True, request_meta)
+            QRService._log_scan(
+                qr_id=None,
+                batch_id=batch_id,
+                status="not_found",
+                signature=signature,
+                is_valid=True,
+                request_meta=request_meta,
+                scan_count=0
+            )
 
             return {
                 "status": "not_found",
                 "message": "Medicine mismatch"
             }, 404
 
-        # 🔎 STEP 4 — FIND QR RECORD
+        # STEP 4 — FIND QR RECORD
         qr_record = QRCode.query.filter_by(
             batch_id=batch_id,
             signature=signature
         ).first()
 
         if not qr_record:
-            logging.warning(f"QR not registered: batch={batch_id}")
+            logging.warning(
+                f"QR not registered: batch={batch_id}"
+            )
 
-            QRService._log_scan(batch_id, "not_found", signature, True, request_meta)
+            QRService._log_scan(
+                qr_id=None,
+                batch_id=batch_id,
+                status="not_found",
+                signature=signature,
+                is_valid=True,
+                request_meta=request_meta,
+                scan_count=0
+            )
 
             return {
                 "status": "not_found",
                 "message": "QR not registered"
             }, 404
 
-        # 🚨 STEP 5 — CLONE DETECTION
+        # STEP 5 — CLONE DETECTION
         current_count = qr_record.scan_count
+        qr_record.scan_count += 1
+
+        # If already scanned before, mark as flagged
+        if current_count >= 1:
+            qr_record.is_flagged = True
 
         try:
-            qr_record.scan_count += 1
             db.session.commit()
+
         except Exception as e:
             db.session.rollback()
-            logging.error(f"DB error during scan update: {str(e)}")
+
+            logging.error(
+                f"DB error during scan update: {str(e)}"
+            )
+
             raise
 
-        # 🔴 CLONED
+        # CLONED
         if current_count >= 1:
             logging.warning(
-                f"CLONED QR detected: batch={batch_id}, scans={qr_record.scan_count}"
+                f"CLONED QR detected: batch={batch_id}, qr_id={qr_record.id}, scans={qr_record.scan_count}"
             )
 
             QRService._log_scan(
-                batch_id,
-                "cloned",
-                signature,
-                True,
-                request_meta,
-                qr_record.scan_count
+                qr_id=qr_record.id,
+                batch_id=batch_id,
+                status="cloned",
+                signature=signature,
+                is_valid=True,
+                request_meta=request_meta,
+                scan_count=qr_record.scan_count
             )
 
             return {
                 "status": "cloned",
                 "message": f"QR scanned {qr_record.scan_count} times",
+                "qr_id": qr_record.id,
+                "batch_id": batch_id,
                 "scan_count": qr_record.scan_count
             }, 200
 
-        # 🟢 AUTHENTIC
-        logging.info(f"QR verified: batch={batch_id}, status=authentic")
+        # AUTHENTIC FIRST SCAN
+        logging.info(
+            f"QR verified: batch={batch_id}, qr_id={qr_record.id}, status=authentic"
+        )
 
         QRService._log_scan(
-            batch_id,
-            "authentic",
-            signature,
-            True,
-            request_meta,
-            1
+            qr_id=qr_record.id,
+            batch_id=batch_id,
+            status="authentic",
+            signature=signature,
+            is_valid=True,
+            request_meta=request_meta,
+            scan_count=1
         )
 
         return {
             "status": "authentic",
             "message": "Valid medicine",
+            "qr_id": qr_record.id,
             "batch_id": batch_id,
             "medicine_id": medicine_id,
             "scan_count": 1
         }, 200
 
     # -------------------------
-    # 📝 LOGGING HELPER
+    # LOGGING HELPER
     # -------------------------
     @staticmethod
-    def _log_scan(batch_id, status, signature, is_valid, request_meta, scan_count=None):
+    def _log_scan(
+        qr_id,
+        batch_id,
+        status,
+        signature,
+        is_valid,
+        request_meta,
+        scan_count=None
+    ):
         try:
             log = ScanLog(
+                qr_id=qr_id,
                 batch_id=batch_id,
                 status=status,
                 signature=signature[:64],
@@ -205,16 +282,23 @@ class QRService:
 
         except Exception as e:
             db.session.rollback()
-            logging.error(f"Scan log failed: {str(e)}")
+
+            logging.error(
+                f"Scan log failed: {str(e)}"
+            )
 
     # -------------------------
-    # 📊 ANALYTICS
+    # ANALYTICS
     # -------------------------
     @staticmethod
     def get_scan_stats(batch_id):
-        total_scans = ScanLog.query.filter_by(batch_id=batch_id).count()
+        total_scans = ScanLog.query.filter_by(
+            batch_id=batch_id
+        ).count()
 
-        unique_qrs = QRCode.query.filter_by(batch_id=batch_id).count()
+        unique_qrs = QRCode.query.filter_by(
+            batch_id=batch_id
+        ).count()
 
         cloned_count = QRCode.query.filter(
             QRCode.batch_id == batch_id,
@@ -229,20 +313,24 @@ class QRService:
         }
 
     # -------------------------
-    # 🚨 FRAUD ALERTS
+    # FRAUD ALERTS
     # -------------------------
     @staticmethod
     def get_fraud_alerts(limit=50):
         logs = ScanLog.query.filter(
             ScanLog.status.in_(["tampered", "cloned"])
-        ).order_by(ScanLog.scanned_at.desc()).limit(limit).all()
+        ).order_by(
+            ScanLog.scanned_at.desc()
+        ).limit(limit).all()
 
         return [
             {
+                "qr_id": log.qr_id,
                 "batch_id": log.batch_id,
                 "status": log.status,
                 "scan_count": log.scan_count,
-                "timestamp": log.scanned_at.isoformat() if log.scanned_at else None,
+                "timestamp": log.scanned_at.isoformat()
+                if log.scanned_at else None,
                 "ip": log.ip_address
             }
             for log in logs

@@ -1,165 +1,153 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import DashboardLayout from "../layouts/DashboardLayout";
 
+import { getBatches } from "../services/batchService";
 import { generateQRCode } from "../services/qrService";
 
+
 function QRGenerator() {
-
-    const [formData, setFormData] = useState({
-        batch_id: "",
-        medicine_id: "",
-        manufacture_date: "",
-        expiry_date: ""
-    });
-
+    const [batches, setBatches] = useState([]);
+    const [batchId, setBatchId] = useState("");
     const [qrData, setQrData] = useState(null);
-
     const [loading, setLoading] = useState(false);
-
     const [error, setError] = useState("");
 
-    const handleChange = (e) => {
+    useEffect(() => {
+        loadBatches();
+    }, []);
 
-        setFormData({
-            ...formData,
-            [e.target.name]: e.target.value
-        });
-
+    const loadBatches = async () => {
+        try {
+            const response = await getBatches();
+            setBatches(response.data || []);
+        } catch (error) {
+            console.log(error.response?.data || error);
+        }
     };
 
     const handleSubmit = async (e) => {
-
         e.preventDefault();
 
-        setLoading(true);
-
-        setError("");
+        if (!batchId) {
+            setError("Please select a batch");
+            return;
+        }
 
         try {
+            setLoading(true);
+            setError("");
 
-            const data = await generateQRCode(formData);
+            const response = await generateQRCode({
+                batch_id: batchId
+            });
 
-            setQrData(data);
+            setQrData(response);
 
-        } catch (err) {
-
+        } catch (error) {
             setError(
-                err.response?.data?.error || "QR generation failed"
+                error.response?.data?.error ||
+                "QR generation failed"
             );
-
         } finally {
-
             setLoading(false);
-
         }
     };
 
     return (
         <DashboardLayout>
-
             <h1 className="text-4xl font-bold mb-6">
                 QR Generator
             </h1>
 
-            {/* FORM */}
             <form
                 onSubmit={handleSubmit}
                 className="bg-white p-6 rounded-xl shadow mb-6"
             >
+                <label className="block mb-2 font-bold">
+                    Select Batch
+                </label>
 
-                <div className="grid grid-cols-2 gap-4">
+                <select
+                    value={batchId}
+                    onChange={(e) => setBatchId(e.target.value)}
+                    className="border p-3 rounded w-full mb-4"
+                >
+                    <option value="">
+                        Select Batch
+                    </option>
 
-                    <input
-                        type="number"
-                        name="batch_id"
-                        placeholder="Batch ID"
-                        className="border p-3 rounded-lg"
-                        onChange={handleChange}
-                    />
-
-                    <input
-                        type="number"
-                        name="medicine_id"
-                        placeholder="Medicine ID"
-                        className="border p-3 rounded-lg"
-                        onChange={handleChange}
-                    />
-
-                    <input
-                        type="date"
-                        name="manufacture_date"
-                        className="border p-3 rounded-lg"
-                        onChange={handleChange}
-                    />
-
-                    <input
-                        type="date"
-                        name="expiry_date"
-                        className="border p-3 rounded-lg"
-                        onChange={handleChange}
-                    />
-
-                </div>
+                    {batches.map((batch) => (
+                        <option
+                            key={batch.id}
+                            value={batch.id}
+                        >
+                            {batch.batch_number} — {batch.medicine_name || `Medicine ID ${batch.medicine_id}`}
+                        </option>
+                    ))}
+                </select>
 
                 <button
                     type="submit"
-                    className="mt-6 bg-black text-white px-6 py-3 rounded-lg"
+                    className="bg-black text-white px-6 py-3 rounded"
                 >
                     {loading ? "Generating..." : "Generate QR"}
                 </button>
-
             </form>
 
-            {/* ERROR */}
             {error && (
-                <div className="bg-red-100 text-red-500 p-4 rounded-lg mb-6">
+                <div className="bg-red-100 text-red-600 p-4 rounded mb-6">
                     {error}
                 </div>
             )}
 
-            {/* QR RESULT */}
             {qrData && (
-
                 <div className="bg-white p-6 rounded-xl shadow">
-
                     <h2 className="text-2xl font-bold mb-4">
                         Generated QR Code
                     </h2>
 
-                    {/* QR IMAGE */}
                     <img
                         src={`data:image/png;base64,${qrData.qr_code}`}
                         alt="QR Code"
-                        className="w-64 h-64 border"
+                        className="w-64 h-64 border mb-6"
                     />
 
-                    {/* PAYLOAD */}
-                    <div className="mt-6">
+                    <p>
+                        <strong>Batch ID:</strong> {qrData.batch_id}
+                    </p>
 
+                    <p>
+                        <strong>Medicine ID:</strong> {qrData.medicine_id}
+                    </p>
+
+                    <p>
+                        <strong>Manufacture Date:</strong> {qrData.manufacture_date}
+                    </p>
+
+                    <p>
+                        <strong>Expiry Date:</strong> {qrData.expiry_date}
+                    </p>
+
+                    <div className="mt-4">
                         <h3 className="font-bold mb-2">
                             Payload
                         </h3>
 
-                        <p className="break-all bg-gray-100 p-3 rounded-lg text-sm">
+                        <p className="break-all bg-gray-100 p-3 rounded text-sm">
                             {qrData.payload}
                         </p>
-
                     </div>
 
-                    {/* DOWNLOAD */}
                     <a
                         href={`data:image/png;base64,${qrData.qr_code}`}
-                        download={`qr_batch_${formData.batch_id}.png`}
-                        className="inline-block mt-6 bg-green-600 text-white px-6 py-3 rounded-lg"
+                        download={`qr_batch_${qrData.batch_id}.png`}
+                        className="inline-block mt-6 bg-green-600 text-white px-6 py-3 rounded"
                     >
                         Download QR
                     </a>
-
                 </div>
-
             )}
-
         </DashboardLayout>
     );
 }

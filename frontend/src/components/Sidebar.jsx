@@ -23,16 +23,40 @@ function Sidebar() {
                     Dashboard
                 </Link>
 
+                <Link to="/scanner">
+                    QR Scanner
+                </Link>
+
+                <Link to="/medicines">
+                    Medicine Management
+                </Link>
+
+                <Link to="/scan-history">
+                    Scan History
+                </Link>
+
+                <Link to="/batches">
+                    Batch Management
+                </Link>
+
                 <Link to="/fraud-alerts">
                     Fraud Alerts
                 </Link>
 
-                <Link to="/batch-stats">
-                    Batch Stats
+                <Link to="/fraud-analytics">
+                    Fraud Analytics
+                </Link>
+
+                <Link to="/expiry-alerts">
+                    Expiry Alerts
                 </Link>
 
                 <Link to="/qr-generator">
                     QR Generator
+                </Link>
+
+                <Link to="/qr-registry">
+                    QR Registry
                 </Link>
 
                 <button
