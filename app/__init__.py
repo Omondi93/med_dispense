@@ -1,18 +1,29 @@
 from flask import Flask
 import logging
 
+from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
+from flask_migrate import Migrate
+from flask_jwt_extended import JWTManager
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+from .config import Config
+
+
+# -------------------------
+# LOGGING
+# -------------------------
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s"
 )
 
-from flask_sqlalchemy import SQLAlchemy
-from flask_cors import CORS
-from flask_migrate import Migrate
-from flask_jwt_extended import JWTManager
-from .config import Config
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+
+# -------------------------
+# EXTENSIONS
+# -------------------------
 
 limiter = Limiter(key_func=get_remote_address)
 db = SQLAlchemy()
@@ -20,19 +31,42 @@ migrate = Migrate()
 jwt = JWTManager()
 
 
+# -------------------------
+# APP FACTORY
+# -------------------------
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
+    # -------------------------
+    # CORS CONFIG
+    # -------------------------
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": [
+                "http://localhost:5173",
+                "med-dispense-rlhqm93t3-spencer-s-projects.vercel.app"
+            ]
+        }
+    })
+
+    # -------------------------
+    # INIT EXTENSIONS
+    # -------------------------
     limiter.init_app(app)
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
-    CORS(app)
 
-    # Import models AFTER db is initialized
+    # -------------------------
+    # IMPORT MODELS
+    # -------------------------
     from app import models
 
+    # -------------------------
+    # REGISTER BLUEPRINTS
+    # -------------------------
     from app.routes.auth import auth_bp
     app.register_blueprint(auth_bp)
 
@@ -48,7 +82,9 @@ def create_app():
     from app.routes.batch import batch_bp
     app.register_blueprint(batch_bp)
 
-    # ✅ FIXED INDENTATION
+    # -------------------------
+    # HEALTH CHECK
+    # -------------------------
     @app.route("/")
     def home():
         return {
