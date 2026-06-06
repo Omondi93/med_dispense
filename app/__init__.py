@@ -31,25 +31,19 @@ migrate = Migrate()
 jwt = JWTManager()
 
 
-# -------------------------
-# APP FACTORY
-# -------------------------
-
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # -------------------------
-    # CORS CONFIG
-    # -------------------------
     CORS(app, resources={
         r"/api/*": {
             "origins": [
                 "http://localhost:5173",
-                "med-dispense-rlhqm93t3-spencer-s-projects.vercel.app"
+                "https://med-dispense-bnzy9o2ii-spencer-s-projects.vercel.app/"
             ]
         }
     })
+
 
     # -------------------------
     # INIT EXTENSIONS
