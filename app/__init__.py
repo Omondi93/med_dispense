@@ -39,7 +39,7 @@ def create_app():
         r"/api/*": {
             "origins": [
                 "http://localhost:5173",
-                "https://med-dispense-bnzy9o2ii-spencer-s-projects.vercel.app/"
+                "https://med-dispense-theta.vercel.app/"
             ]
         }
     })
