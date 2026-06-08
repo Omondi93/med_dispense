@@ -271,6 +271,40 @@ def get_qr_registry():
 # -------------------------
 # QR SCAN HISTORY
 # -------------------------
+@admin_bp.route("/scan-history", methods=["GET"])
+@admin_required
+def get_all_scan_history():
+    try:
+        logs = ScanLog.query.order_by(
+            ScanLog.scanned_at.desc()
+        ).limit(100).all()
+
+        results = []
+
+        for log in logs:
+            results.append({
+                "id": log.id,
+                "qr_id": log.qr_id,
+                "batch_id": log.batch_id,
+                "status": log.status,
+                "signature": log.signature,
+                "is_valid": log.is_valid,
+                "scan_count": log.scan_count,
+                "ip_address": log.ip_address,
+                "user_agent": log.user_agent,
+                "scanned_at": log.scanned_at.isoformat() if log.scanned_at else None
+            })
+
+        return jsonify({
+            "success": True,
+            "data": results
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 @admin_bp.route("/scan-history/<int:qr_id>", methods=["GET"])
 @admin_required
