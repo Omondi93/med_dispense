@@ -39,7 +39,7 @@ def create_app():
         r"/api/*": {
             "origins": [
                 "http://localhost:5173",
-                "https://med-dispense.netlify.app/"
+                "https://med-dispense.netlify.app"
             ]
         }
     })
