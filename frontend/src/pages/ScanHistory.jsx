@@ -1,34 +1,34 @@
 import { useEffect, useState } from "react";
 
 import DashboardLayout
-from "../layouts/DashboardLayout";
+    from "../layouts/DashboardLayout";
 
 import {
     getScanHistory
 }
-from "../services/scanService";
+    from "../services/scanService";
 
 
-function ScanHistory(){
+function ScanHistory() {
 
-    const [logs,setLogs]=useState([]);
+    const [logs, setLogs] = useState([]);
 
-    const [loading,setLoading]=useState(true);
+    const [loading, setLoading] = useState(true);
 
 
-    useEffect(()=>{
+    useEffect(() => {
 
         loadHistory();
 
-    },[]);
+    }, []);
 
 
-    const loadHistory = async()=>{
+    const loadHistory = async () => {
 
-        try{
+        try {
 
             const data =
-            await getScanHistory();
+                await getScanHistory();
 
             setLogs(
                 data.data
@@ -36,13 +36,13 @@ function ScanHistory(){
 
         }
 
-        catch(error){
+        catch (error) {
 
             console.log(error);
 
         }
 
-        finally{
+        finally {
 
             setLoading(false);
 
@@ -51,102 +51,102 @@ function ScanHistory(){
     };
 
 
-return(
+    return (
 
-<DashboardLayout>
+        <DashboardLayout>
 
-<h1 className="text-4xl font-bold mb-6">
+            <h1 className="text-4xl font-bold mb-6">
 
-Scan History
+                Scan History
 
-</h1>
+            </h1>
 
 
-{loading ? (
+            {loading ? (
 
-<p>Loading...</p>
+                <p>Loading...</p>
 
-) : (
+            ) : (
 
-<div className="bg-white rounded-xl shadow overflow-hidden">
+                <div className="overflow-x-auto">
 
-<table className="w-full">
+                    <table className="min-w-full">
 
-<thead className="bg-black text-white">
+                        <thead className="bg-black text-white">
 
-<tr>
+                            <tr>
 
-<th className="p-4">
-Batch
-</th>
+                                <th className="p-4">
+                                    Batch
+                                </th>
 
-<th className="p-4">
-Status
-</th>
+                                <th className="p-4">
+                                    Status
+                                </th>
 
-<th className="p-4">
-Count
-</th>
+                                <th className="p-4">
+                                    Count
+                                </th>
 
-<th className="p-4">
-Time
-</th>
+                                <th className="p-4">
+                                    Time
+                                </th>
 
-<th className="p-4">
-IP
-</th>
+                                <th className="p-4">
+                                    IP
+                                </th>
 
-</tr>
+                            </tr>
 
-</thead>
+                        </thead>
 
-<tbody>
+                        <tbody>
 
-{
-logs.map(
-(log,index)=>(
+                            {
+                                logs.map(
+                                    (log, index) => (
 
-<tr
-key={index}
-className="border-b"
->
+                                        <tr
+                                            key={index}
+                                            className="border-b"
+                                        >
 
-<td className="p-4">
-{log.batch_id}
-</td>
+                                            <td className="p-4">
+                                                {log.batch_id}
+                                            </td>
 
-<td className="p-4">
-{log.status}
-</td>
+                                            <td className="p-4">
+                                                {log.status}
+                                            </td>
 
-<td className="p-4">
-{log.scan_count}
-</td>
+                                            <td className="p-4">
+                                                {log.scan_count}
+                                            </td>
 
-<td className="p-4">
-{log.scanned_at}
-</td>
+                                            <td className="p-4">
+                                                {log.scanned_at}
+                                            </td>
 
-<td className="p-4">
-{log.ip_address}
-</td>
+                                            <td className="p-4">
+                                                {log.ip_address}
+                                            </td>
 
-</tr>
+                                        </tr>
 
-))
-}
+                                    ))
+                            }
 
-</tbody>
+                        </tbody>
 
-</table>
+                    </table>
 
-</div>
+                </div>
 
-)}
+            )}
 
-</DashboardLayout>
+        </DashboardLayout>
 
-)
+    )
 
 }
 

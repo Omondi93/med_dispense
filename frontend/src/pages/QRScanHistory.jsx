@@ -37,11 +37,11 @@ function QRScanHistory() {
             {loading ? (
                 <p>Loading scan history...</p>
             ) : (
-                <div className="bg-white p-6 rounded-xl shadow">
+                <div className="overflow-x-auto">
                     {logs.length === 0 ? (
                         <p>No scan history found for this QR.</p>
                     ) : (
-                        <table className="w-full">
+                        <table className="min-w-full">
                             <thead>
                                 <tr>
                                     <th>Status</th>

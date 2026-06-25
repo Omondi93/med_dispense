@@ -95,12 +95,12 @@ function FraudAnalytics() {
                     </table>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl shadow">
+                <div className="overflow-x-auto">
                     <h2 className="text-2xl font-bold mb-4">
                         Flagged QR Codes
                     </h2>
 
-                    <table className="w-full">
+                    <table className="min-w-full">
                         <thead>
                             <tr>
                                 <th>QR ID</th>

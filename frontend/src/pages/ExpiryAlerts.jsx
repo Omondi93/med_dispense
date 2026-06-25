@@ -43,8 +43,8 @@ function ExpiryAlerts() {
             {loading ? (
                 <p>Loading expiry alerts...</p>
             ) : (
-                <div className="bg-white p-6 rounded-xl shadow overflow-x-auto">
-                    <table className="w-full">
+                <div className="overflow-x-auto">
+                    <table className="min-w-full">
                         <thead>
                             <tr>
                                 <th>Batch</th>

@@ -15,255 +15,117 @@ import {
   getFraudAnalytics
 } from "../services/dashboardService";
 
-import { getExpiryAlerts } from "../services/alertService";
-
 
 function Dashboard() {
-
-  // Dashboard cards
   const [stats, setStats] = useState({
     total_scans: 0,
     fraud_alerts: 0,
     active_batches: 0
   });
 
-  // Chart data
   const [analytics, setAnalytics] = useState([]);
 
-  // Expiry alerts
-  const [alerts, setAlerts] = useState({
-    expired: [],
-    expiring_soon: []
-  });
-
   const [loading, setLoading] = useState(true);
-
 
   useEffect(() => {
     fetchDashboard();
   }, []);
 
-
   const fetchDashboard = async () => {
-
     try {
+      const statsData = await getDashboardStats();
+      const analyticsData = await getFraudAnalytics();
 
-      // Dashboard cards
-      const statsData =
-        await getDashboardStats();
-
-      // Chart analytics
-      const analyticsData =
-        await getFraudAnalytics();
-
-      // Expiry alerts
-      const alertsData =
-        await getExpiryAlerts();
-
-      // FIX 1: Normalize stats — fallback to 0 if any field is missing
       setStats({
         total_scans: statsData.data?.total_scans ?? 0,
         fraud_alerts: statsData.data?.fraud_alerts ?? 0,
         active_batches: statsData.data?.active_batches ?? 0
       });
 
-      // FIX 2: Normalize analytics — fallback to [] if API returns null/undefined
       setAnalytics(
-        Array.isArray(analyticsData.data) ? analyticsData.data : []
+        Array.isArray(analyticsData.data)
+          ? analyticsData.data
+          : []
       );
 
-      // FIX 3: Normalize alerts — fallback to [] for each array (THIS was line 235)
-      setAlerts({
-        expired: Array.isArray(alertsData.data?.expired)
-          ? alertsData.data.expired
-          : [],
-        expiring_soon: Array.isArray(alertsData.data?.expiring_soon)
-          ? alertsData.data.expiring_soon
-          : []
-      });
-
-    }
-
-    catch (error) {
-
+    } catch (error) {
       console.error(error);
-
-    }
-
-    finally {
-
+    } finally {
       setLoading(false);
-
     }
-
   };
 
-
   return (
-
     <DashboardLayout>
-
-      <h1 className="text-4xl font-bold mb-6">
-
+      <h1 className="text-3xl md:text-4xl font-bold mb-6">
         Dashboard
-
       </h1>
 
-      {
-
-        loading ? (
-
-          <p>Loading dashboard...</p>
-
-        ) : (
-
-          <>
-
-            {/* STAT CARDS */}
-
-            <div className="grid grid-cols-3 gap-6 mb-10">
-
-              <div className="bg-white p-6 rounded-xl shadow">
-
-                <h2 className="text-xl font-bold">
-
-                  Total Scans
-
-                </h2>
-
-                <p className="text-4xl mt-4">
-
-                  {stats.total_scans}
-
-                </p>
-
-              </div>
-
-
-              <div className="bg-white p-6 rounded-xl shadow">
-
-                <h2 className="text-xl font-bold">
-
-                  Fraud Alerts
-
-                </h2>
-
-                <p className="text-4xl mt-4 text-red-500">
-
-                  {stats.fraud_alerts}
-
-                </p>
-
-              </div>
-
-
-              <div className="bg-white p-6 rounded-xl shadow">
-
-                <h2 className="text-xl font-bold">
-
-                  Active Batches
-
-                </h2>
-
-                <p className="text-4xl mt-4">
-
-                  {stats.active_batches}
-
-                </p>
-
-              </div>
-
-            </div>
-
-
-            {/* FRAUD ANALYTICS CHART */}
-
-            <div className="bg-white p-6 rounded-xl shadow mb-8">
-
-              <h2 className="text-2xl font-bold mb-6">
-
-                Scan Analytics
-
+      {loading ? (
+        <p>Loading dashboard...</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
+            <div className="bg-white p-6 rounded-xl shadow">
+              <h2 className="text-xl font-bold">
+                Total Scans
               </h2>
 
-              <div className="h-96">
-
-                <ResponsiveContainer
-                  width="100%"
-                  height="100%"
-                >
-
-                  <PieChart>
-
-                    <Pie
-                      data={analytics}
-                      dataKey="count"
-                      nameKey="status"
-                      outerRadius={150}
-                      label
-                    >
-
-                      {
-                        analytics.map(
-                          (entry, index) => (
-
-                            <Cell
-                              key={index}
-                            />
-
-                          )
-                        )
-                      }
-
-                    </Pie>
-
-                    <Tooltip />
-
-                  </PieChart>
-
-                </ResponsiveContainer>
-
-              </div>
-
+              <p className="text-4xl mt-4">
+                {stats.total_scans}
+              </p>
             </div>
-
-
-            {/* EXPIRY ALERTS */}
 
             <div className="bg-white p-6 rounded-xl shadow">
-
-              <h2 className="text-2xl font-bold mb-4">
-
-                Expiry Alerts
-
+              <h2 className="text-xl font-bold">
+                Fraud Alerts
               </h2>
 
-              <p className="mb-2">
-
-                🔴 Expired Batches:
-                {" "}
-                {alerts.expired.length}
-
+              <p className="text-4xl mt-4 text-red-500">
+                {stats.fraud_alerts}
               </p>
-
-              <p>
-
-                🟠 Expiring Soon:
-                {" "}
-                {alerts.expiring_soon.length}
-
-              </p>
-
             </div>
 
-          </>
+            <div className="bg-white p-6 rounded-xl shadow">
+              <h2 className="text-xl font-bold">
+                Active Batches
+              </h2>
 
-        )}
+              <p className="text-4xl mt-4">
+                {stats.active_batches}
+              </p>
+            </div>
+          </div>
 
+          <div className="bg-white p-4 md:p-6 rounded-xl shadow">
+            <h2 className="text-xl md:text-2xl font-bold mb-6">
+              Scan Analytics
+            </h2>
+
+            <div className="h-72 md:h-96">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={analytics}
+                    dataKey="count"
+                    nameKey="status"
+                    outerRadius="70%"
+                    label
+                  >
+                    {analytics.map((entry, index) => (
+                      <Cell key={index} />
+                    ))}
+                  </Pie>
+
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </>
+      )}
     </DashboardLayout>
-
   );
-
 }
 
 export default Dashboard;

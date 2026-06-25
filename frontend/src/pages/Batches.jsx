@@ -149,8 +149,8 @@ function Batches() {
                 </form>
             </div>
 
-            <div className="bg-white p-6 rounded-xl shadow">
-                <table className="w-full">
+            <div className="overflow-x-auto">
+                <table className="min-w-full">
                     <thead>
                         <tr>
                             <th>ID</th>

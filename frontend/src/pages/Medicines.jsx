@@ -132,9 +132,9 @@ function Medicines() {
             </div>
 
 
-            <div className="bg-white p-6 rounded-xl shadow">
+            <div className="overflow-x-auto">
 
-                <table className="w-full">
+                <table className="min-w-full">
 
                     <thead>
 

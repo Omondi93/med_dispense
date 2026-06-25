@@ -51,9 +51,9 @@ function FraudAlerts() {
             )}
 
             {!loading && alerts.length > 0 && (
-                <div className="bg-white rounded-xl shadow overflow-hidden">
+                <div className="overflow-x-auto">
 
-                    <table className="w-full">
+                    <table className="min-w-full">
 
                         <thead className="bg-black text-white">
 

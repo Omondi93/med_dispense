@@ -1,22 +1,27 @@
+import { useState } from "react";
+
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 
 function DashboardLayout({ children }) {
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+
     return (
-        <div className="flex">
+        <div className="min-h-screen bg-gray-100">
+            <Topbar
+                onMenuClick={() => setSidebarOpen(true)}
+            />
 
-            <Sidebar />
+            <div className="flex">
+                <Sidebar
+                    isOpen={sidebarOpen}
+                    onClose={() => setSidebarOpen(false)}
+                />
 
-            <div className="flex-1 bg-gray-100 min-h-screen">
-
-                <Topbar />
-
-                <div className="p-6">
+                <main className="flex-1 p-4 md:p-6 overflow-x-auto">
                     {children}
-                </div>
-
+                </main>
             </div>
-
         </div>
     );
 }
