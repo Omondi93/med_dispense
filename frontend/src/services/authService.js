@@ -1,7 +1,8 @@
+```javascript
 import API from "./api";
 
 export const loginUser = async (email, password) => {
-    const response = await API.post("/auth/login", {
+    const response = await API.post("/api/auth/login", {
         email,
         password,
     });
@@ -10,7 +11,7 @@ export const loginUser = async (email, password) => {
 };
 
 export const registerUser = async (name, email, password) => {
-    const response = await API.post("/auth/register", {
+    const response = await API.post("/api/auth/register", {
         name,
         email,
         password,
@@ -18,3 +19,4 @@ export const registerUser = async (name, email, password) => {
 
     return response.data;
 };
+```
