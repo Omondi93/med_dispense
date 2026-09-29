@@ -1,4 +1,3 @@
-```javascript
 import API from "./api";
 
 export const loginUser = async (email, password) => {
@@ -19,4 +18,3 @@ export const registerUser = async (name, email, password) => {
 
     return response.data;
 };
-```
