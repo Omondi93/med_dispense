@@ -42,6 +42,7 @@ def create_app():
             "origins": [
                 "http://localhost:5173",
                 "https://med-dispense-theta.vercel.app",
+                "https://med-dispense-spencer-s-projects.vercel.app",
             ],
             "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"],
