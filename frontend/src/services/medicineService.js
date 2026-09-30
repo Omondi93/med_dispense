@@ -28,7 +28,7 @@ export const getMedicines =
         const response =
             await API.get(
 
-                "/medicine/"
+                "/api/medicine/"
 
             );
 

@@ -28,7 +28,7 @@ export const getBatches =
         const response =
             await API.get(
 
-                "/batch/"
+                "/api/batch/"
 
             );
 
