@@ -35,7 +35,7 @@ function QRScanner() {
                 const response =
                     await API.post(
 
-                        "/qr/verify",
+                        "/api/qr/verify",
 
                         {
                             qr_data: qrData

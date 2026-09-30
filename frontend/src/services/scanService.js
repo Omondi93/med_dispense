@@ -4,7 +4,7 @@ export const getScanHistory = async () => {
 
     const response =
         await API.get(
-            "/admin/scan-history"
+            "/api/admin/scan-history"
         );
 
     return response.data;

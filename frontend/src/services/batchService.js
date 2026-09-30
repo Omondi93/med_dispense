@@ -9,7 +9,7 @@ export const createBatch =
         const response =
             await API.post(
 
-                "/batch/",
+                "/api/batch/",
 
                 data
 

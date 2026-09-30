@@ -1,6 +1,6 @@
 import API from "./api";
 
 export const getExpiryAlerts = async () => {
-    const response = await API.get("/admin/expiry-alerts");
+    const response = await API.get("/api/admin/expiry-alerts");
     return response.data;
 };

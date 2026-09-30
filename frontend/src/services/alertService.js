@@ -4,7 +4,7 @@ export const getExpiryAlerts = async()=>{
 
     const response =
     await API.get(
-        "/admin/expiry-alerts"
+        "/api/admin/expiry-alerts"
     );
 
     return response.data;

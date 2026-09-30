@@ -9,7 +9,7 @@ export const createMedicine =
         const response =
             await API.post(
 
-                "/medicine/",
+                "/api/medicine/",
 
                 data
 
