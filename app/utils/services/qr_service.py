@@ -157,17 +157,22 @@ class QRService:
                 "message": "Medicine mismatch"
             }, 404
 
-        # STEP 4 — FIND QR RECORD
-        qr_record = QRCode.query.filter_by(
+        # STEP 4 — FIND THE EXACT REGISTERED QR/PACKAGE
+        qr_query = QRCode.query.filter_by(
             batch_id=batch_id,
             signature=signature
-        ).first()
+        )
+        if serial:
+            qr_query = qr_query.filter_by(serial_number=serial)
+        else:
+            # Backward compatibility for QR codes generated before package serials.
+            qr_query = qr_query.filter(QRCode.serial_number.is_(None))
+        qr_record = qr_query.first()
 
         if not qr_record:
             logging.warning(
-                f"QR not registered: batch={batch_id}"
+                f"QR not registered: batch={batch_id}, serial={serial}"
             )
-
             QRService._log_scan(
                 qr_id=None,
                 batch_id=batch_id,
@@ -177,78 +182,47 @@ class QRService:
                 request_meta=request_meta,
                 scan_count=0
             )
-
             return {
                 "status": "not_found",
-                "message": "QR not registered"
+                "message": "Package QR is not registered"
             }, 404
 
-        # STEP 5 — CLONE DETECTION
-        current_count = qr_record.scan_count
-        qr_record.scan_count += 1
-
-        # If already scanned before, mark as flagged
-        if current_count >= 1:
-            qr_record.is_flagged = True
+        # STEP 5 — RECORD SCAN. Repeated scans alone do not prove cloning.
+        previous_count = qr_record.scan_count or 0
+        qr_record.scan_count = previous_count + 1
+        status = "authentic" if previous_count == 0 else "repeat_scan"
+        message = (
+            "Package identity verified"
+            if previous_count == 0
+            else "Package identity is valid; this QR has been scanned before. Repeated scanning alone does not prove cloning."
+        )
 
         try:
             db.session.commit()
-
         except Exception as e:
             db.session.rollback()
-
-            logging.error(
-                f"DB error during scan update: {str(e)}"
-            )
-
+            logging.error(f"DB error during scan update: {str(e)}")
             raise
-
-        # CLONED
-        if current_count >= 1:
-            logging.warning(
-                f"CLONED QR detected: batch={batch_id}, qr_id={qr_record.id}, scans={qr_record.scan_count}"
-            )
-
-            QRService._log_scan(
-                qr_id=qr_record.id,
-                batch_id=batch_id,
-                status="cloned",
-                signature=signature,
-                is_valid=True,
-                request_meta=request_meta,
-                scan_count=qr_record.scan_count
-            )
-
-            return {
-                "status": "cloned",
-                "message": f"QR scanned {qr_record.scan_count} times",
-                "qr_id": qr_record.id,
-                "batch_id": batch_id,
-                "scan_count": qr_record.scan_count
-            }, 200
-
-        # AUTHENTIC FIRST SCAN
-        logging.info(
-            f"QR verified: batch={batch_id}, qr_id={qr_record.id}, status=authentic"
-        )
 
         QRService._log_scan(
             qr_id=qr_record.id,
             batch_id=batch_id,
-            status="authentic",
+            status=status,
             signature=signature,
             is_valid=True,
             request_meta=request_meta,
-            scan_count=1
+            scan_count=qr_record.scan_count
         )
 
         return {
-            "status": "authentic",
-            "message": "Valid medicine",
+            "status": status,
+            "message": message,
             "qr_id": qr_record.id,
+            "serial": qr_record.serial_number,
             "batch_id": batch_id,
             "medicine_id": medicine_id,
-            "scan_count": 1
+            "scan_count": qr_record.scan_count,
+            "potential_clone": False
         }, 200
 
     # -------------------------
@@ -300,16 +274,21 @@ class QRService:
             batch_id=batch_id
         ).count()
 
-        cloned_count = QRCode.query.filter(
-            QRCode.batch_id == batch_id,
-            QRCode.scan_count > 1
+        # A repeat scan is not sufficient evidence of cloning.
+        flagged_count = QRCode.query.filter_by(
+            batch_id=batch_id,
+            is_flagged=True
         ).count()
 
         return {
             "batch_id": batch_id,
             "total_scans": total_scans,
             "unique_qrs": unique_qrs,
-            "potential_clones": cloned_count
+            "potential_clones": flagged_count,
+            "repeat_scans": ScanLog.query.filter_by(
+                batch_id=batch_id,
+                status="repeat_scan"
+            ).count()
         }
 
     # -------------------------

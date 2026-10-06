@@ -110,18 +110,18 @@ def generate_qr():
                 "error": "Batch does not exist"
             }), 404
 
-        payload = generate_qr_payload(
+        # Every newly generated QR identifies one package, not just a batch.
+        payload, serial, signature = generate_qr_payload_with_serial(
             batch_data["batch_id"],
             batch_data["medicine_id"],
             batch_data["manufacture_date"],
             batch_data["expiry_date"]
         )
 
-        signature = payload.split("|")[-1]
-
         reg_response, reg_status = QRService.register_qr(
             batch_id=batch_data["batch_id"],
             signature=signature,
+            serial=serial,
             payload=payload
         )
 
@@ -136,6 +136,7 @@ def generate_qr():
             "qr_code": qr_code,
             "payload": payload,
             "qr_id": reg_response["qr_id"],
+            "serial": serial,
             "batch_id": batch_data["batch_id"],
             "medicine_id": batch_data["medicine_id"],
             "manufacture_date": batch_data["manufacture_date"],
@@ -240,20 +241,21 @@ def generate_qr_file():
                 "error": "Batch does not exist"
             }), 404
 
-        payload = generate_qr_payload(
+        payload, serial, signature = generate_qr_payload_with_serial(
             batch_data["batch_id"],
             batch_data["medicine_id"],
             batch_data["manufacture_date"],
             batch_data["expiry_date"]
         )
 
-        signature = payload.split("|")[-1]
-
-        QRService.register_qr(
+        reg_response, reg_status = QRService.register_qr(
             batch_id=batch_data["batch_id"],
             signature=signature,
+            serial=serial,
             payload=payload
         )
+        if not reg_response.get("success"):
+            return jsonify(reg_response), reg_status
 
         qr = qrcode.make(payload)
 
@@ -265,7 +267,7 @@ def generate_qr_file():
             buffer,
             mimetype="image/png",
             as_attachment=True,
-            download_name=f"medicine_qr_batch_{batch_data['batch_id']}.png"
+            download_name=f"medicine_qr_package_{serial}.png"
         )
 
     except Exception as e:

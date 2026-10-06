@@ -1,4 +1,4 @@
-import { useEffect, useState }
+import { useEffect, useState, useRef }
     from "react";
 
 import { Html5QrcodeScanner }
@@ -19,6 +19,9 @@ function QRScanner() {
 
     const [loading, setLoading]
         = useState(false);
+
+    // Prevent the live camera from submitting the same QR on every video frame.
+    const lastCameraPayloadRef = useRef(null);
 
 
     // -----------------------------------
@@ -103,9 +106,9 @@ function QRScanner() {
 
             async (decodedText) => {
 
-                await verifyQR(
-                    decodedText
-                );
+                if (lastCameraPayloadRef.current === decodedText) return;
+                lastCameraPayloadRef.current = decodedText;
+                await verifyQR(decodedText);
 
             },
 
@@ -310,22 +313,36 @@ function QRScanner() {
                         </h2>
 
                         <p>
-
-                            Status:
-                            {" "}
+                            Status:{" "}
                             <b>
-                                {result.status}
+                                {result.status === "repeat_scan"
+                                    ? "Previously scanned — review if unexpected"
+                                    : result.status === "authentic"
+                                        ? "Verified"
+                                        : result.status}
                             </b>
-
                         </p>
 
                         <p>
-
-                            Message:
-                            {" "}
-                            {result.message}
-
+                            Message: {result.message}
                         </p>
+
+                        {result.status === "repeat_scan" && (
+                            <p className="mt-3 text-amber-700">
+                                A repeated scan is not proof of counterfeiting by itself.
+                            </p>
+                        )}
+
+                        <button
+                            type="button"
+                            className="mt-4 rounded bg-blue-600 px-4 py-2 text-white"
+                            onClick={() => {
+                                lastCameraPayloadRef.current = null;
+                                setResult(null);
+                            }}
+                        >
+                            Scan another QR
+                        </button>
 
                     </div>
 
