@@ -1,344 +1,155 @@
-from flask import Blueprint, jsonify
-from sqlalchemy import func
 from datetime import datetime, timedelta
 
+from flask import Blueprint, jsonify
+from flask_jwt_extended import get_jwt_identity
+from sqlalchemy import func
+
 from app import db
+from app.models.batch import Batch
+from app.models.qrcode import QRCode
+from app.models.scan_log import ScanLog
 from app.utils.decorators import admin_required
 from app.utils.services.qr_service import QRService
 
-from app.models.batch import Batch
-from app.models.scan_log import ScanLog
-from app.models.qrcode import QRCode
-
 admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
+
+
+def _manufacturer_id():
+    return int(get_jwt_identity())
+
+
+def _owned_qrs(manufacturer_id):
+    return QRCode.query.join(Batch, QRCode.batch_id == Batch.id).filter(
+        Batch.manufacturer_id == manufacturer_id
+    )
+
+
+def _owned_logs(manufacturer_id):
+    return ScanLog.query.join(Batch, ScanLog.batch_id == Batch.id).filter(
+        Batch.manufacturer_id == manufacturer_id
+    )
+
+
+def _serialize_log(log):
+    return {
+        "id": log.id, "qr_id": log.qr_id, "batch_id": log.batch_id,
+        "status": log.status, "signature": log.signature,
+        "is_valid": log.is_valid, "scan_count": log.scan_count,
+        "ip_address": log.ip_address, "user_agent": log.user_agent,
+        "scanned_at": log.scanned_at.isoformat() if log.scanned_at else None
+    }
+
 
 @admin_bp.route("/fraud-summary", methods=["GET"])
 @admin_required
 def fraud_summary():
-    try:
-        total_qrs = QRCode.query.count()
+    manufacturer_id = _manufacturer_id()
+    qrs = _owned_qrs(manufacturer_id)
+    logs = _owned_logs(manufacturer_id)
+    most_scanned = qrs.order_by(QRCode.scan_count.desc()).limit(10).all()
+    flagged = qrs.filter(QRCode.is_flagged.is_(True)).order_by(QRCode.scan_count.desc()).limit(10).all()
+    return jsonify({"success": True, "data": {
+        "total_qrs": qrs.count(),
+        "flagged_qrs": _owned_qrs(manufacturer_id).filter(QRCode.is_flagged.is_(True)).count(),
+        "cloned_scans": logs.filter(ScanLog.status == "cloned").count(),
+        "tampered_scans": _owned_logs(manufacturer_id).filter(ScanLog.status == "tampered").count(),
+        "most_scanned": [{"id": q.id, "batch_id": q.batch_id, "scan_count": q.scan_count,
+                          "is_flagged": q.is_flagged} for q in most_scanned],
+        "flagged_list": [{"id": q.id, "batch_id": q.batch_id, "scan_count": q.scan_count,
+                          "signature": q.signature[:20] + "..."} for q in flagged]
+    }}), 200
 
-        flagged_qrs = QRCode.query.filter_by(
-            is_flagged=True
-        ).count()
 
-        cloned_scans = ScanLog.query.filter_by(
-            status="cloned"
-        ).count()
-
-        tampered_scans = ScanLog.query.filter_by(
-            status="tampered"
-        ).count()
-
-        most_scanned = QRCode.query.order_by(
-            QRCode.scan_count.desc()
-        ).limit(10).all()
-
-        flagged_list = QRCode.query.filter_by(
-            is_flagged=True
-        ).order_by(
-            QRCode.scan_count.desc()
-        ).limit(10).all()
-
-        return jsonify({
-            "success": True,
-            "data": {
-                "total_qrs": total_qrs,
-                "flagged_qrs": flagged_qrs,
-                "cloned_scans": cloned_scans,
-                "tampered_scans": tampered_scans,
-                "most_scanned": [
-                    {
-                        "id": qr.id,
-                        "batch_id": qr.batch_id,
-                        "scan_count": qr.scan_count,
-                        "is_flagged": qr.is_flagged
-                    }
-                    for qr in most_scanned
-                ],
-                "flagged_list": [
-                    {
-                        "id": qr.id,
-                        "batch_id": qr.batch_id,
-                        "scan_count": qr.scan_count,
-                        "signature": qr.signature[:20] + "..."
-                    }
-                    for qr in flagged_list
-                ]
-            }
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
 @admin_bp.route("/dashboard-stats", methods=["GET"])
 @admin_required
 def dashboard_stats():
-    try:
-        total_scans = ScanLog.query.count()
+    manufacturer_id = _manufacturer_id()
+    logs = _owned_logs(manufacturer_id)
+    return jsonify({"success": True, "data": {
+        "total_scans": logs.count(),
+        "fraud_alerts": _owned_logs(manufacturer_id).filter(ScanLog.status.in_(["cloned", "tampered"])).count(),
+        "active_batches": Batch.query.filter_by(manufacturer_id=manufacturer_id).count()
+    }}), 200
 
-        fraud_alerts = ScanLog.query.filter(
-            ScanLog.status.in_(["cloned", "tampered"])
-        ).count()
-
-        active_batches = Batch.query.count()
-
-        return jsonify({
-            "success": True,
-            "data": {
-                "total_scans": total_scans,
-                "fraud_alerts": fraud_alerts,
-                "active_batches": active_batches
-            }
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
-
-# -------------------------
-# FRAUD ANALYTICS
-# -------------------------
 
 @admin_bp.route("/fraud-analytics", methods=["GET"])
 @admin_required
 def fraud_analytics():
-    try:
-        results = db.session.query(
-            ScanLog.status,
-            func.count(ScanLog.id)
-        ).group_by(
-            ScanLog.status
-        ).all()
+    manufacturer_id = _manufacturer_id()
+    results = db.session.query(ScanLog.status, func.count(ScanLog.id)).join(
+        Batch, ScanLog.batch_id == Batch.id
+    ).filter(Batch.manufacturer_id == manufacturer_id).group_by(ScanLog.status).all()
+    return jsonify({"success": True, "data": [{"status": status, "count": count}
+                                                   for status, count in results]}), 200
 
-        analytics = []
-
-        for status, count in results:
-            analytics.append({
-                "status": status,
-                "count": count
-            })
-
-        return jsonify({
-            "success": True,
-            "data": analytics
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
-
-# -------------------------
-# FRAUD ALERTS
-# -------------------------
 
 @admin_bp.route("/fraud-alerts", methods=["GET"])
 @admin_required
 def get_fraud_alerts():
-    try:
-        alerts = QRService.get_fraud_alerts(limit=50)
+    manufacturer_id = _manufacturer_id()
+    logs = _owned_logs(manufacturer_id).filter(ScanLog.status.in_(["tampered", "cloned"])).order_by(
+        ScanLog.scanned_at.desc()).limit(50).all()
+    alerts = [{"qr_id": log.qr_id, "batch_id": log.batch_id, "status": log.status,
+               "scan_count": log.scan_count, "timestamp": log.scanned_at.isoformat() if log.scanned_at else None,
+               "ip": log.ip_address} for log in logs]
+    return jsonify({"success": True, "count": len(alerts), "alerts": alerts}), 200
 
-        return jsonify({
-            "success": True,
-            "count": len(alerts),
-            "alerts": alerts
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
-
-# -------------------------
-# BATCH STATS
-# -------------------------
 
 @admin_bp.route("/batch-stats/<int:batch_id>", methods=["GET"])
 @admin_required
 def get_batch_stats(batch_id):
-    try:
-        stats = QRService.get_scan_stats(batch_id)
+    manufacturer_id = _manufacturer_id()
+    batch = Batch.query.filter_by(id=batch_id, manufacturer_id=manufacturer_id).first()
+    if not batch:
+        return jsonify({"success": False, "error": "Batch not found"}), 404
+    return jsonify({"success": True, "data": QRService.get_scan_stats(batch_id)}), 200
 
-        return jsonify({
-            "success": True,
-            "data": stats
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
-
-# -------------------------
-# EXPIRY ALERTS
-# -------------------------
 
 @admin_bp.route("/expiry-alerts", methods=["GET"])
 @admin_required
 def expiry_alerts():
-    try:
-        today = datetime.utcnow()
-        warning_date = today + timedelta(days=30)
+    manufacturer_id = _manufacturer_id()
+    today = datetime.utcnow()
+    warning_date = today + timedelta(days=30)
+    batches = Batch.query.filter(Batch.manufacturer_id == manufacturer_id,
+                                 Batch.expiry_date <= warning_date).order_by(Batch.expiry_date.asc()).all()
+    results = []
+    for batch in batches:
+        days_remaining = (batch.expiry_date - today).days
+        status = "expired" if days_remaining < 0 else "critical" if days_remaining <= 7 else "warning"
+        results.append({"id": batch.id, "batch_number": batch.batch_number,
+                        "medicine_name": batch.medicine.name if batch.medicine else None,
+                        "expiry_date": batch.expiry_date.isoformat(), "days_remaining": days_remaining,
+                        "status": status})
+    return jsonify({"success": True, "data": results}), 200
 
-        batches = Batch.query.filter(
-            Batch.expiry_date <= warning_date
-        ).order_by(
-            Batch.expiry_date.asc()
-        ).all()
-
-        results = []
-
-        for batch in batches:
-            days_remaining = (batch.expiry_date - today).days
-
-            if days_remaining < 0:
-                status = "expired"
-            elif days_remaining <= 7:
-                status = "critical"
-            else:
-                status = "warning"
-
-            results.append({
-                "id": batch.id,
-                "batch_number": batch.batch_number,
-                "medicine_name": batch.medicine.name if batch.medicine else None,
-                "expiry_date": batch.expiry_date.isoformat(),
-                "days_remaining": days_remaining,
-                "status": status
-            })
-
-        return jsonify({
-            "success": True,
-            "data": results
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
-
-# -------------------------
-# QR REGISTRY
-# -------------------------
 
 @admin_bp.route("/qr-registry", methods=["GET"])
 @admin_required
 def get_qr_registry():
-    try:
-        qrs = QRCode.query.order_by(
-            QRCode.created_at.desc()
-        ).all()
-
-        results = []
-
-        for qr in qrs:
-            results.append({
-                "id": qr.id,
-                "batch_id": qr.batch_id,
-                "serial_number": qr.serial_number,
-                "signature": qr.signature[:20] + "...",
-                "scan_count": qr.scan_count,
-                "is_flagged": qr.is_flagged,
-                "created_at": qr.created_at.isoformat() if qr.created_at else None
-            })
-
-        return jsonify({
-            "success": True,
-            "data": results
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+    manufacturer_id = _manufacturer_id()
+    qrs = _owned_qrs(manufacturer_id).order_by(QRCode.created_at.desc()).all()
+    return jsonify({"success": True, "data": [
+        {"id": q.id, "batch_id": q.batch_id, "serial_number": q.serial_number,
+         "signature": q.signature[:20] + "...", "scan_count": q.scan_count,
+         "is_flagged": q.is_flagged, "created_at": q.created_at.isoformat() if q.created_at else None}
+        for q in qrs
+    ]}), 200
 
 
-# -------------------------
-# QR SCAN HISTORY
-# -------------------------
 @admin_bp.route("/scan-history", methods=["GET"])
 @admin_required
 def get_all_scan_history():
-    try:
-        logs = ScanLog.query.order_by(
-            ScanLog.scanned_at.desc()
-        ).limit(100).all()
+    logs = _owned_logs(_manufacturer_id()).order_by(ScanLog.scanned_at.desc()).limit(100).all()
+    return jsonify({"success": True, "data": [_serialize_log(log) for log in logs]}), 200
 
-        results = []
-
-        for log in logs:
-            results.append({
-                "id": log.id,
-                "qr_id": log.qr_id,
-                "batch_id": log.batch_id,
-                "status": log.status,
-                "signature": log.signature,
-                "is_valid": log.is_valid,
-                "scan_count": log.scan_count,
-                "ip_address": log.ip_address,
-                "user_agent": log.user_agent,
-                "scanned_at": log.scanned_at.isoformat() if log.scanned_at else None
-            })
-
-        return jsonify({
-            "success": True,
-            "data": results
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
 
 @admin_bp.route("/scan-history/<int:qr_id>", methods=["GET"])
 @admin_required
 def get_scan_history_by_qr(qr_id):
-    try:
-        logs = ScanLog.query.filter_by(
-            qr_id=qr_id
-        ).order_by(
-            ScanLog.scanned_at.desc()
-        ).all()
-
-        results = []
-
-        for log in logs:
-            results.append({
-                "id": log.id,
-                "qr_id": log.qr_id,
-                "batch_id": log.batch_id,
-                "status": log.status,
-                "signature": log.signature,
-                "is_valid": log.is_valid,
-                "scan_count": log.scan_count,
-                "ip_address": log.ip_address,
-                "user_agent": log.user_agent,
-                "scanned_at": log.scanned_at.isoformat() if log.scanned_at else None
-            })
-
-        return jsonify({
-            "success": True,
-            "data": results
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+    manufacturer_id = _manufacturer_id()
+    qr = _owned_qrs(manufacturer_id).filter(QRCode.id == qr_id).first()
+    if not qr:
+        return jsonify({"success": False, "error": "QR code not found"}), 404
+    logs = ScanLog.query.filter_by(qr_id=qr_id).order_by(ScanLog.scanned_at.desc()).all()
+    return jsonify({"success": True, "data": [_serialize_log(log) for log in logs]}), 200

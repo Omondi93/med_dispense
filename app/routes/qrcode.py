@@ -3,8 +3,9 @@ from io import BytesIO
 import qrcode
 
 from flask import Blueprint, request, jsonify, send_file
+from flask_jwt_extended import jwt_required, get_jwt_identity
 
-from app import limiter
+from app import limiter, db
 from app.models.batch import Batch
 from app.utils.services.qr_service import QRService
 from app.utils.qr_security import (
@@ -40,10 +41,10 @@ def make_qr_base64(payload):
     ).decode("utf-8")
 
 
-def get_batch_data(batch_id):
-    batch = Batch.query.get(batch_id)
+def get_batch_data(batch_id, manufacturer_id):
+    batch = db.session.get(Batch, batch_id)
 
-    if not batch:
+    if not batch or batch.manufacturer_id != manufacturer_id:
         return None
 
     return {
@@ -68,6 +69,8 @@ def verify_qr():
 
     try:
         parsed = parse_qr_payload(data["qr_data"])
+        if parsed is None:
+            raise ValueError("Invalid QR payload")
     except Exception:
         return jsonify({
             "status": "tampered",
@@ -88,6 +91,7 @@ def verify_qr():
 
 
 @qr_bp.route("/generate", methods=["POST"])
+@jwt_required()
 def generate_qr():
     try:
         data = request.get_json()
@@ -98,7 +102,7 @@ def generate_qr():
                 "error": "batch_id is required"
             }), 400
 
-        batch_data = get_batch_data(data["batch_id"])
+        batch_data = get_batch_data(data["batch_id"], int(get_jwt_identity()))
 
         if not batch_data:
             return jsonify({
@@ -147,6 +151,7 @@ def generate_qr():
 
 
 @qr_bp.route("/generate/bulk", methods=["POST"])
+@jwt_required()
 def generate_bulk_qr():
     try:
         data = request.get_json()
@@ -165,7 +170,7 @@ def generate_bulk_qr():
                 "error": "Quantity must be between 1 and 5000"
             }), 400
 
-        batch_data = get_batch_data(data["batch_id"])
+        batch_data = get_batch_data(data["batch_id"], int(get_jwt_identity()))
 
         if not batch_data:
             return jsonify({
@@ -216,6 +221,7 @@ def generate_bulk_qr():
 
 
 @qr_bp.route("/generate/file", methods=["POST"])
+@jwt_required()
 def generate_qr_file():
     try:
         data = request.get_json()
@@ -226,7 +232,7 @@ def generate_qr_file():
                 "error": "batch_id is required"
             }), 400
 
-        batch_data = get_batch_data(data["batch_id"])
+        batch_data = get_batch_data(data["batch_id"], int(get_jwt_identity()))
 
         if not batch_data:
             return jsonify({
@@ -270,7 +276,11 @@ def generate_qr_file():
 
 
 @qr_bp.route("/stats/<int:batch_id>", methods=["GET"])
+@jwt_required()
 def get_batch_stats(batch_id):
+    batch = db.session.get(Batch, batch_id)
+    if not batch or batch.manufacturer_id != int(get_jwt_identity()):
+        return jsonify({"success": False, "error": "Batch not found"}), 404
     stats = QRService.get_scan_stats(batch_id)
 
     return jsonify({
