@@ -187,6 +187,25 @@ class QRService:
                 "message": "Package QR is not registered"
             }, 404
 
+        # Phase 3: a source package that has been split is no longer a valid active sale unit.
+        try:
+            from app.models.package import MedicinePackage
+            package_record = MedicinePackage.query.filter_by(qr_code_id=qr_record.id).first()
+        except Exception:
+            package_record = None
+        if package_record and package_record.status != "active":
+            QRService._log_scan(
+                qr_id=qr_record.id, batch_id=batch_id, status="package_split",
+                signature=signature, is_valid=True, request_meta=request_meta,
+                scan_count=qr_record.scan_count or 0
+            )
+            return {
+                "status": "package_split",
+                "message": "This source package has been split and is no longer an active package. Verify the replacement package QR codes.",
+                "qr_id": qr_record.id, "serial": qr_record.serial_number,
+                "batch_id": batch_id, "potential_clone": False
+            }, 409
+
         # STEP 5 — RECORD SCAN. Repeated scans alone do not prove cloning.
         previous_count = qr_record.scan_count or 0
         qr_record.scan_count = previous_count + 1

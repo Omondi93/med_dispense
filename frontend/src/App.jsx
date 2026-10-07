@@ -15,6 +15,7 @@ import FraudAnalytics from "./pages/FraudAnalytics";
 import ProtectedRoute from "./components/ProtectedRoute";
 import QRScanHistory from "./pages/QRScanHistory";
 import ExpiryAlerts from "./pages/ExpiryAlerts";
+import PackageTraceability from "./pages/PackageTraceability";
 
 function App() {
   return (
@@ -84,6 +85,15 @@ function App() {
           element={
             <ProtectedRoute>
               <Batches />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/packages"
+          element={
+            <ProtectedRoute>
+              <PackageTraceability />
             </ProtectedRoute>
           }
         />

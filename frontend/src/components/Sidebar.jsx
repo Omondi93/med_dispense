@@ -96,6 +96,14 @@ function Sidebar({ isOpen, onClose }) {
                     </Link>
 
                     <Link
+                        to="/packages"
+                        onClick={onClose}
+                        className={linkClass}
+                    >
+                        Package Traceability
+                    </Link>
+
+                    <Link
                         to="/fraud-alerts"
                         onClick={onClose}
                         className={linkClass}

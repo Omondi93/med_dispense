@@ -82,6 +82,9 @@ def create_app():
     from app.routes.batch import batch_bp
     app.register_blueprint(batch_bp)
 
+    from app.routes.packages import packages_bp
+    app.register_blueprint(packages_bp)
+
     # -------------------------
     # HEALTH CHECK
     # -------------------------
